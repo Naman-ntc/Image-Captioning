@@ -139,11 +139,18 @@ class CaptioningRNN(object):
         ############################################################################
         h0,cache_image = affine_forward(features,W_proj,b_proj)    
         embedded_captions_in,cache_embedding = word_embedding_forward(captions_in,W_embed)
-        hidden_states,cache_hidden = rnn_forward(embedded_captions_in,h0,Wx,Wh,b)
+        if (self.cell_type=='rnn'):
+            hidden_states,cache_hidden = rnn_forward(embedded_captions_in,h0,Wx,Wh,b)
+        else :
+            hidden_states,cache_hidden = lstm_forward(embedded_captions_in,h0,Wx,Wh,b)
         outs,cache_out = temporal_affine_forward(hidden_states,W_vocab,b_vocab)
         loss,douts = temporal_softmax_loss(outs,captions_out,mask)
         dhidden_states,grad['W_vocab'],grad['b_vocab'] = temporal_affine_backward(douts,cache_out)
-        dembedded_captions,dh0,grad['Wx'],grad['Wh'],grad['b'] = rnn_backward(dhidden_states,cache_hidden)
+        if (self.cell_type=='rnn'):
+            dembedded_captions,dh0,grad['Wx'],grad['Wh'],grad['b'] = rnn_backward(dhidden_states,cache_hidden)
+        else :
+            dembedded_captions,dh0,grad['Wx'],grad['Wh'],grad['b'] = lstm_backward(dhidden_states,cache_hidden)
+        
         grad['W_embed'] = word_embedding_backward(dembedded_captions,cache_embedding)
         dfeatures,grad['W_proj'],grad['b_proj'] = affine_backward(dh0,cache_image)
         #pass
@@ -208,7 +215,18 @@ class CaptioningRNN(object):
         # functions; you'll need to call rnn_step_forward or lstm_step_forward in #
         # a loop.                                                                 #
         ###########################################################################
-        pass
+        hidden_state,_ = affine_forward(features,W_proj,b_proj) # N,
+        word_embeded,_ = word_embedding_forward(self._start, W_embed)
+        c = 0
+        for i in range(max_length):
+            if (self.cell_type=='rnn'):
+                hidden_state,_ = rnn_step_forward(word_embeded,hidden_state,Wx,Wh,b)
+            else :
+                hidden_state,c,_ = lstm_step_forward(word_embeded,hidden_state,c,Wx,Wh,b)
+            out,_ = affine_forward(hidden_state,W_vocab,b_vocab)
+            captions[:,i] = np.argmax(out,axis=1)
+            word_embeded,_ = word_embedding_forward(captions[:,i],W_embed)
+        #pass
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
